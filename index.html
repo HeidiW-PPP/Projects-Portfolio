@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UNVEIL</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#f2f2f0}
+body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#000;user-select:none}
+#c{position:fixed;inset:0;z-index:0;display:block}
+.nav{position:fixed;top:0;left:0;display:flex;z-index:100}
+.nav-item{display:flex;align-items:center;padding:6px 12px;border:1px solid rgba(0,0,0,.14);border-right:none;font-size:9.5px;letter-spacing:.09em;white-space:nowrap;height:28px}
+.nav-item:last-child{border-right:1px solid rgba(0,0,0,.14)}
+.nav-item sup{font-size:6.5px;vertical-align:super;line-height:0;margin:0 1px}
+.bottom-nav{position:fixed;bottom:14px;right:16px;display:flex;gap:14px;z-index:100;font-size:9.5px;letter-spacing:.09em}
+.bottom-nav .on{color:#000}
+.bottom-nav .off{color:rgba(0,0,0,.28)}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-item">UNVEIL&thinsp;<sup>®</sup>&thinsp;PROJECTS</div>
+  <div class="nav-item">RESEARCH</div>
+  <div class="nav-item">STUDIO</div>
+  <div class="nav-item">CONTACT</div>
+</header>
+
+<canvas id="c"></canvas>
+
+<div class="bottom-nav">
+  <span class="on">OVERVIEW</span>
+  <span class="off">INDEX</span>
+</div>
+
+<script src="three.min.js"></script>
+<script>
+(function () {
+
+  // ─── Tile definitions ───────────────────────────────────────────────────────
+  // w, h in Three.js world units.
+  // Portrait cards ≈ 1.55 × 2.10,  landscape cards ≈ 2.80 × 1.80
+  // Tile order matters for initial display:
+  // slot = posMod(i - 0, 20); if slot > 10, slot -= 20
+  // i=19 → slot -1 (the near card, partially off-screen bottom-left)
+  // i=0  → slot 0 (front card)
+  // Placing image tiles at 0,1,3,4,6,19 ensures images dominate the near positions.
+  const TILES = [
+    { img: 'tile_images/tile1.webp', w: 1.85, h: 2.50 },   // slot 0
+    { img: 'tile_images/tile2.jpg',  w: 3.35, h: 2.15 },   // slot 1
+    { bg: ['#1a4070','#2c5a90'], w: 1.85, h: 2.50 },        // slot 2
+    { img: 'tile_images/tile3.jpg',  w: 1.85, h: 2.50 },   // slot 3
+    { img: 'tile_images/tile4.jpg',  w: 3.35, h: 2.15 },   // slot 4
+    { bg: ['#1c2870','#2a3898'], w: 2.10, h: 2.35 },        // slot 5
+    { img: 'tile_images/tile5.avif', w: 2.30, h: 2.30 },   // slot 6
+    { bg: ['#184830','#206a44'], w: 2.75, h: 2.15 },        // slot 7
+    { bg: ['#44187e','#5c22a4'], w: 1.85, h: 2.50 },        // slot 8
+    { bg: ['#107880','#18a090'], w: 2.75, h: 2.15 },        // slot 9
+    { bg: ['#1a3878','#2450a0'], w: 1.85, h: 2.50 },        // slot 10
+    { bg: ['#600e20','#882040'], w: 2.10, h: 2.35 },        // slot 11
+    { bg: ['#105a80','#1880a8'], w: 2.30, h: 2.30 },        // slot 12
+    { bg: ['#2c4800','#406800'], w: 2.75, h: 2.15 },        // slot 13
+    { bg: ['#0e1860','#1a2284'], w: 1.85, h: 2.50 },        // slot 14 (→ far, mostly off-screen)
+    { bg: ['#006840','#009060'], w: 2.10, h: 2.35 },        // slot 15 (→ slot -5)
+    { bg: ['#521870','#7028a0'], w: 1.85, h: 2.50 },        // slot 16 (→ slot -4)
+    { bg: ['#106070','#188090'], w: 2.75, h: 2.15 },        // slot 17 (→ slot -3)
+    { bg: ['#083858','#0c5070'], w: 1.85, h: 2.50 },        // slot 18 (→ slot -2)
+    { img: 'tile_images/tile6.webp', w: 1.85, h: 2.50 },   // slot -1: image near card
+  ];
+
+  const N    = TILES.length; // 20
+  const STEP = new THREE.Vector3(0.42, 0.24, -0.85);
+  const EDGE = 0.10;   // glass edge thickness in world units — visible bright strip
+  const VIS  = 12;     // visible forward slots (0 … VIS-1), plus slot -1 behind
+
+  // ─── Renderer ───────────────────────────────────────────────────────────────
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setClearColor(0xf2f2f0, 1);
+
+  // ─── Scene ──────────────────────────────────────────────────────────────────
+  const scene = new THREE.Scene();
+
+  // ─── Camera ─────────────────────────────────────────────────────────────────
+  // Positioned above (+Y) and to the right (+X) of the card stack so the viewer
+  // can see the TOP and RIGHT glass edges of every card (matching both references).
+  // lookAt is pulled left + down so the current card (slot 0, world origin) sits
+  // at lower-left on screen.
+  const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.01, 100);
+  camera.position.set(4.5, 2.5, 8.0);
+  // Look at slot 4, centering the stack mid-range on screen.
+  // Near card (slot -1) appears at lower-left partially off-screen.
+  // Far cards (slots 8-11) appear at upper-right — matches reference diagonal.
+  camera.lookAt(1.8, 1.1, -3.5);
+
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+  function mkEdgeMat() {
+    return new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.88,
+      depthWrite: false,
+    });
+  }
+
+  function mkGradTex(c1, c2) {
+    const cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 256;
+    const ctx = cv.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 256, 256);
+    g.addColorStop(0, c1);
+    g.addColorStop(1, c2);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
+    return new THREE.CanvasTexture(cv);
+  }
+
+  // ─── Build card groups ──────────────────────────────────────────────────────
+  const loader = new THREE.TextureLoader();
+  const groups = [];
+
+  TILES.forEach(t => {
+    const { w, h } = t;
+    const grp = new THREE.Group();
+
+    // ── Face ──
+    let faceMat;
+    if (t.img) {
+      const tex = loader.load(t.img);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      faceMat = new THREE.MeshBasicMaterial({ map: tex });
+    } else {
+      const tex = mkGradTex(t.bg[0], t.bg[1]);
+      // depthWrite: true so near placeholder cards properly occlude cards behind them
+      faceMat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        opacity: 0.70,
+        depthWrite: true,
+      });
+    }
+    grp.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), faceMat));
+
+    // ── Top border line on face surface ──
+    const topBorder = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, 0.010),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false })
+    );
+    topBorder.position.set(0, h / 2 - 0.005, 0.002);
+    grp.add(topBorder);
+
+    // ── Left border line on face surface ──
+    const leftBorder = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.010, h),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.60, depthWrite: false })
+    );
+    leftBorder.position.set(-w / 2 + 0.005, 0, 0.002);
+    grp.add(leftBorder);
+
+    // ── Right glass edge ──
+    // rotation.y = +π/2  →  plane normal rotates from +Z to +X
+    // Camera is at positive X, so this face is visible to the viewer.
+    const rightEdge = new THREE.Mesh(new THREE.PlaneGeometry(EDGE, h), mkEdgeMat());
+    rightEdge.rotation.y = Math.PI / 2;
+    rightEdge.position.x = w / 2;
+    grp.add(rightEdge);
+
+    // ── Top glass edge ──
+    // rotation.x = -π/2  →  plane normal rotates from +Z to +Y
+    // Camera is above (+Y), so this face is visible to the viewer.
+    const topEdge = new THREE.Mesh(new THREE.PlaneGeometry(w, EDGE), mkEdgeMat());
+    topEdge.rotation.x = -Math.PI / 2;
+    topEdge.position.y = h / 2;
+    grp.add(topEdge);
+
+    scene.add(grp);
+    groups.push(grp);
+  });
+
+  // ─── Scroll state ───────────────────────────────────────────────────────────
+  let scrollPos = 0, target = 0, snapTimer = null;
+
+  function posMod(a, b) { return ((a % b) + b) % b; }
+
+  // ─── Position update ────────────────────────────────────────────────────────
+  function update() {
+    const base = Math.round(scrollPos);
+    const frac = scrollPos - base;
+    for (let i = 0; i < N; i++) {
+      let slot = posMod(i - base, N);
+      if (slot > N / 2) slot -= N; // fold the back-half to negative slots
+      const s = slot - frac;
+      groups[i].position.set(STEP.x * s, STEP.y * s, STEP.z * s);
+      // Slots -2…VIS: near cards slide off bottom-left, far cards enter from upper-right
+      groups[i].visible = slot >= -2 && slot < VIS;
+    }
+  }
+
+  // ─── Input ──────────────────────────────────────────────────────────────────
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    target += e.deltaY / 320;
+    clearTimeout(snapTimer);
+    snapTimer = setTimeout(() => { target = Math.round(target); }, 240);
+  }, { passive: false });
+
+  // ─── Resize ─────────────────────────────────────────────────────────────────
+  window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  // ─── Render loop ────────────────────────────────────────────────────────────
+  (function animate() {
+    requestAnimationFrame(animate);
+    scrollPos += (target - scrollPos) * 0.10;
+    update();
+    renderer.render(scene, camera);
+  })();
+
+})();
+</script>
+</body>
+</html>
