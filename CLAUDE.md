@@ -1,11 +1,10 @@
-# UNVEIL Portfolio — Three.js Card Stack
+# Heidi W. Portfolio — Three.js Card Stack
 
 ## Project Goal
-Recreate the unveil.fr portfolio site as a single `index.html`. The site is a 3D diagonal card stack — cards fan from lower-left (large/near) to upper-right (small/far), like a conveyor belt you scroll through.
+Personal portfolio site as a single `index.html`. A 3D diagonal card stack — cards fan from lower-left (large/near) to upper-right (small/far), like a conveyor belt you scroll through. Live at: `https://heidyw-ppp.github.io/Projects/`
 
 ## Reference Images
-- `NewReference.png` — **primary reference**
-- Near card exits via bottom edge, center-left (~25% from left). Far cards exit via top edge, center-right (~75% from left). ~10–12 cards visible. Diagonal angle ~48–54° from horizontal.
+- `NewReference.png` — original unveil.fr reference
 
 ## How to Screenshot
 ```bash
@@ -17,27 +16,33 @@ Output: `ss_v10.png`. Requires Node.js + Puppeteer (`npm install` if needed). Op
 
 **✅ Working:**
 - Three.js r155 loaded locally from `three.min.js`
-- 20 tiles: 6 real images + 14 gradient glass tiles, interleaved
-- Camera above-right shows right + top glass edges on every card
+- 20 tiles, all with real images from `tile_images/`, data driven from `projects.js`
 - Diagonal stack from lower-left (large) to upper-right (small), angle ~50°
-- Scroll with easing (`deltaY / 320`), snap to integer after 240ms idle
-- Glass opacity: 0.55
+- Smooth scroll with easing (`deltaY / 320`), snap to integer after 240ms idle
+- No pop on entry/exit — frustum culling disabled, fold threshold = 13
+- Cards slide right on hover (lerp 0.05, offset 1.1) with smooth easing
+- Rounded image corners (`ShapeGeometry` with r=0.09, UV-remapped)
+- Dark background with purple diagonal streak effect + dot grid overlay
+- Nav rebranded: "HEIDI W. — PROJECTS PORTFOLIO" + "CONTACT" buttons
+- Nav buttons and bottom OVERVIEW/INDEX labels scale up on hover (spring easing)
+- Click on card navigates to `project.html?id=project-XX`
+- `project.html` — dark-themed detail page, reads from `projects.js`
+- `.gitignore` in place, deployed to GitHub Pages
 
-**❌ Remaining issues (priority order):**
-1. **Pop on entry/exit** — Cards snap into/out of view instead of sliding from a corner. Fix: `grp.frustumCulled = false` on every group + traverse children.
-2. **Glass tile appearance** — Try opacity 0.65–0.70 to feel more like frosted glass.
-3. **Edge strip polish** — `EDGE = 0.10`. Try `color: 0xfffaef, opacity: 0.92` for warm-white edge.
-4. **Font** — Currently Barlow. Original uses `nb_international_proregular`. Add if file available locally.
+**⏳ Next session:**
+- Fill in real project data in `projects.js` (currently all placeholders)
+- Discuss project ideas aligned with 2-year bioinformatics/software dev/data science trajectory
 
 ## Technical Architecture
 
-### File: `index.html`
-Single file, all inline:
+### Files
 ```
-<header class="nav">       — UNVEIL ® PROJECTS | RESEARCH | STUDIO | CONTACT
-<canvas id="c">            — Three.js WebGL canvas (position: fixed, inset: 0)
-<div class="bottom-nav">   — OVERVIEW | INDEX
-<script src="three.min.js"> + inline script
+index.html        — main portfolio (single file, all inline)
+projects.js       — project data array (edit this to add/update projects)
+project.html      — detail page template (reads ?id= from URL)
+three.min.js      — Three.js r155 local copy
+tile_images/      — 20 tile images (tile1.jpg … tile20.jpg/png/webp)
+screenshot.js     — Puppeteer screenshot tool
 ```
 
 ### Three.js Setup
@@ -46,28 +51,35 @@ const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.01, 1
 camera.position.set(3.5, 1.8, 8.0);
 camera.lookAt(0.3, 0.0, -3.5);
 
-const STEP = new THREE.Vector3(0.20, 0.40, -0.85);
-// Each card shifts: +0.20 right, +0.40 up, -0.85 into scene
-// Diagonal ≈ 50° from horizontal on screen
-
-const EDGE = 0.10;  // glass edge thickness in world units
+const STEP = new THREE.Vector3(0.26, 0.52, -1.10);
+// Each card shifts: +0.26 right, +0.52 up, -1.10 into scene
 ```
 
 ### Card Geometry (per tile)
 Each `THREE.Group` contains:
-1. **Face plane** — `PlaneGeometry(w, h)`, image or gradient texture
-2. **Top border** — thin white line on face surface (z-offset 0.002)
-3. **Left border** — thin white line on face surface (z-offset 0.002)
-4. **Right glass edge** — `PlaneGeometry(EDGE, h)`, `rotation.y = +Math.PI/2`, at `x = w/2`
-5. **Top glass edge** — `PlaneGeometry(w, EDGE)`, `rotation.x = -Math.PI/2`, at `y = h/2`
+1. **Face** — `roundedRect(w, h, 0.09)` ShapeGeometry, image texture, UV-remapped to [0,1]
+   - `frustumCulled = false` on group + all children
 
-**CRITICAL rotations:**
-- Right edge: `rotation.y = +π/2` → normal faces +X. DO NOT use -π/2.
-- Top edge: `rotation.x = -π/2` → normal faces +Y. DO NOT use +π/2.
+### Rounded Rect Helper
+```javascript
+function roundedRect(w, h, r) {
+  const shape = new THREE.Shape();
+  // ... quadratic curves at each corner ...
+  const geo = new THREE.ShapeGeometry(shape, 6);
+  // UV fix: remap from shape-space to [0,1]
+  const uvs = geo.attributes.uv;
+  for (let i = 0; i < uvs.count; i++) {
+    uvs.setXY(i, (uvs.getX(i) + w/2) / w, (uvs.getY(i) + h/2) / h);
+  }
+  return geo;
+}
+```
 
-### Scroll Logic
+### Scroll + Hover Logic
 ```javascript
 let scrollPos = 0, target = 0;
+let hoveredIdx = -1;
+const hoverOffsets = new Array(N).fill(0);
 
 // Each frame:
 scrollPos += (target - scrollPos) * 0.10;
@@ -76,43 +88,46 @@ scrollPos += (target - scrollPos) * 0.10;
 const base = Math.round(scrollPos);
 const frac = scrollPos - base;
 let slot = posMod(i - base, N);
-if (slot > N / 2) slot -= N;   // fold: slot range -(N/2)…+(N/2)
+if (slot > 13) slot -= N;   // fold threshold 13 (not N/2) — keeps far cards off-screen cleanly
 const s = slot - frac;
-groups[i].position.set(STEP.x * s, STEP.y * s, STEP.z * s);
+hoverOffsets[i] += ((i === hoveredIdx ? 1 : 0) - hoverOffsets[i]) * 0.05;
+groups[i].position.set(STEP.x * s + hoverOffsets[i] * 1.1, STEP.y * s, STEP.z * s);
 ```
 
-### Tile Array
-N = 20. Slot assignment at scroll=0:
-- `i = 19` → `slot = -1` (near card, partially off-screen lower-left)
-- `i = 0`  → `slot = 0` (first fully-visible card)
+### Background
+Pure CSS layered divs at `z-index:0` behind WebGL canvas (`z-index:1`, `alpha:true`):
+- Base: `#000`
+- `#bg-radial`: dark grey radial gradient from top-left with CSS mask fade
+- 5 `.streak` divs: purple `rgb(138,50,220)` linear gradient + `skewX(45deg)` + CSS mask patterns
+- `#bg-dots`: radial dot grid, 20px repeat, 20% opacity
 
-Image tiles at indices: 0, 1, 3, 4, 6, 19.
-Glass tiles: all others. `transparent: true, opacity: 0.55, depthWrite: true`.
+### Nav
+```html
+<div class="nav-item">HEIDI W. — PROJECTS PORTFOLIO</div>
+<div class="nav-item">CONTACT</div>
+```
+Hover: `transform: scale(1.08)` with spring cubic-bezier easing.
 
-## Fix Plan: Pop Issue (Priority 1)
-
-### Problem
-Three.js frustum culls each `Group` via bounding sphere. The cull is binary — a card vanishes in one frame rather than sliding off the edge.
-
-### Solution
-Disable frustum culling on every group and its children. The slot math still moves cards off-screen; Three.js always submits draw calls, GPU clips off-screen triangles harmlessly.
-
+### projects.js Format
 ```javascript
-// In TILES.forEach, right before scene.add(grp):
-grp.traverse(obj => { obj.frustumCulled = false; });
-scene.add(grp);
+{
+  id: 'project-01',      // used for project.html?id=
+  title: 'Project Name',
+  subtitle: 'One line description',
+  img: 'tile_images/tile1.jpg',
+  w: 1.85, h: 2.50,      // card dimensions in world units — DO NOT change
+  tags: ['Python', 'React'],
+  year: '2026',
+  github: 'https://github.com/...',
+  live: '',
+  description: 'Full write-up here.',
+  images: [],
+}
 ```
-
-### Verification
-1. `node screenshot.js` — static frame should look identical to before
-2. Open `http://localhost:8765/` and scroll slowly
-3. Cards should enter from the bottom-left as a small corner, grow smoothly as you scroll
-4. Cards should shrink to a tiny corner at the top-right, then disappear cleanly
-5. No flash, pop, or teleport at any scroll speed
 
 ## Commands Reference
 ```bash
-# Screenshot
+# Screenshot (kills any server on 8765 first)
 node screenshot.js
 
 # Dev server
@@ -125,10 +140,3 @@ const s=http.createServer((req,res)=>{
 s.listen(8765,()=>console.log('http://localhost:8765/'));
 "
 ```
-
-## Comparison Workflow
-1. Edit `index.html`
-2. `node screenshot.js` → `ss_v10.png`
-3. Read `ss_v10.png` and `NewReference.png` side by side
-4. List specific mismatches
-5. Fix and repeat — minimum 2 rounds before stopping

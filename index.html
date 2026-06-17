@@ -59,7 +59,6 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
 
   const N    = TILES.length; // 20
   const STEP = new THREE.Vector3(0.26, 0.52, -1.10);
-  const EDGE = 0.10;   // glass edge thickness in world units — visible bright strip
 
   // ─── Renderer ───────────────────────────────────────────────────────────────
   const canvas = document.getElementById('c');
@@ -83,15 +82,29 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
   camera.lookAt(0.3, 0.0, -3.5);
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
-  function mkEdgeMat() {
-    return new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.88,
-      depthWrite: false,
-    });
-  }
 
+
+  // ─── Rounded rectangle geometry helper ─────────────────────────────────────
+  function roundedRect(w, h, r) {
+    const shape = new THREE.Shape();
+    const hw = w / 2, hh = h / 2;
+    shape.moveTo(-hw + r, -hh);
+    shape.lineTo( hw - r, -hh);
+    shape.quadraticCurveTo( hw, -hh,  hw, -hh + r);
+    shape.lineTo( hw,  hh - r);
+    shape.quadraticCurveTo( hw,  hh,  hw - r,  hh);
+    shape.lineTo(-hw + r,  hh);
+    shape.quadraticCurveTo(-hw,  hh, -hw,  hh - r);
+    shape.lineTo(-hw, -hh + r);
+    shape.quadraticCurveTo(-hw, -hh, -hw + r, -hh);
+    const geo = new THREE.ShapeGeometry(shape, 6);
+    // Remap UVs from shape-space [-hw..hw, -hh..hh] to texture-space [0..1, 0..1]
+    const uvs = geo.attributes.uv;
+    for (let i = 0; i < uvs.count; i++) {
+      uvs.setXY(i, (uvs.getX(i) + hw) / w, (uvs.getY(i) + hh) / h);
+    }
+    return geo;
+  }
 
   // ─── Build card groups ──────────────────────────────────────────────────────
   const loader = new THREE.TextureLoader();
@@ -104,40 +117,9 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
     // ── Face ──
     const tex = loader.load(t.img);
     tex.colorSpace = THREE.SRGBColorSpace;
-    grp.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h),
+    grp.add(new THREE.Mesh(roundedRect(w, h, 0.09),
       new THREE.MeshBasicMaterial({ map: tex })));
 
-    // ── Top border line on face surface ──
-    const topBorder = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, 0.010),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false })
-    );
-    topBorder.position.set(0, h / 2 - 0.005, 0.002);
-    grp.add(topBorder);
-
-    // ── Left border line on face surface ──
-    const leftBorder = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.010, h),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.60, depthWrite: false })
-    );
-    leftBorder.position.set(-w / 2 + 0.005, 0, 0.002);
-    grp.add(leftBorder);
-
-    // ── Right glass edge ──
-    // rotation.y = +π/2  →  plane normal rotates from +Z to +X
-    // Camera is at positive X, so this face is visible to the viewer.
-    const rightEdge = new THREE.Mesh(new THREE.PlaneGeometry(EDGE, h), mkEdgeMat());
-    rightEdge.rotation.y = Math.PI / 2;
-    rightEdge.position.x = w / 2;
-    grp.add(rightEdge);
-
-    // ── Top glass edge ──
-    // rotation.x = -π/2  →  plane normal rotates from +Z to +Y
-    // Camera is above (+Y), so this face is visible to the viewer.
-    const topEdge = new THREE.Mesh(new THREE.PlaneGeometry(w, EDGE), mkEdgeMat());
-    topEdge.rotation.x = -Math.PI / 2;
-    topEdge.position.y = h / 2;
-    grp.add(topEdge);
 
     grp.traverse(obj => { obj.frustumCulled = false; });
     scene.add(grp);
