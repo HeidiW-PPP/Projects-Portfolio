@@ -36,42 +36,15 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
 </div>
 
 <script src="three.min.js"></script>
+<script src="projects.js"></script>
 <script>
 (function () {
 
-  // ─── Tile definitions ───────────────────────────────────────────────────────
-  // w, h in Three.js world units.
-  // Portrait cards ≈ 1.55 × 2.10,  landscape cards ≈ 2.80 × 1.80
-  // Tile order matters for initial display:
-  // slot = posMod(i - 0, 20); if slot > 10, slot -= 20
-  // i=19 → slot -1 (the near card, partially off-screen bottom-left)
-  // i=0  → slot 0 (front card)
-  // Placing image tiles at 0,1,3,4,6,19 ensures images dominate the near positions.
-  const TILES = [
-    { img: 'tile_images/tile1.webp', w: 1.85, h: 2.50 },   // slot 0
-    { img: 'tile_images/tile2.jpg',  w: 3.35, h: 2.15 },   // slot 1
-    { bg: ['#1a4070','#2c5a90'], w: 1.85, h: 2.50 },        // slot 2
-    { img: 'tile_images/tile3.jpg',  w: 1.85, h: 2.50 },   // slot 3
-    { img: 'tile_images/tile4.jpg',  w: 3.35, h: 2.15 },   // slot 4
-    { bg: ['#1c2870','#2a3898'], w: 2.10, h: 2.35 },        // slot 5
-    { img: 'tile_images/tile5.avif', w: 2.30, h: 2.30 },   // slot 6
-    { bg: ['#184830','#206a44'], w: 2.75, h: 2.15 },        // slot 7
-    { bg: ['#44187e','#5c22a4'], w: 1.85, h: 2.50 },        // slot 8
-    { bg: ['#107880','#18a090'], w: 2.75, h: 2.15 },        // slot 9
-    { bg: ['#1a3878','#2450a0'], w: 1.85, h: 2.50 },        // slot 10
-    { bg: ['#600e20','#882040'], w: 2.10, h: 2.35 },        // slot -9
-    { bg: ['#105a80','#1880a8'], w: 2.30, h: 2.30 },        // slot -8
-    { bg: ['#2c4800','#406800'], w: 2.75, h: 2.15 },        // slot -7
-    { bg: ['#0e1860','#1a2284'], w: 1.85, h: 2.50 },        // slot -6
-    { bg: ['#006840','#009060'], w: 2.10, h: 2.35 },        // slot -5
-    { bg: ['#521870','#7028a0'], w: 1.85, h: 2.50 },        // slot -4
-    { bg: ['#106070','#188090'], w: 2.75, h: 2.15 },        // slot -3
-    { bg: ['#083858','#0c5070'], w: 1.85, h: 2.50 },        // slot -2
-    { img: 'tile_images/tile6.webp', w: 1.85, h: 2.50 },   // slot -1: image near card
-  ];
+  // ─── Tile definitions (loaded from projects.js) ─────────────────────────────
+  const TILES = PROJECTS;
 
   const N    = TILES.length; // 20
-  const STEP = new THREE.Vector3(0.20, 0.40, -0.85);
+  const STEP = new THREE.Vector3(0.26, 0.52, -1.10);
   const EDGE = 0.10;   // glass edge thickness in world units — visible bright strip
 
   // ─── Renderer ───────────────────────────────────────────────────────────────
@@ -105,16 +78,6 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
     });
   }
 
-  function mkGradTex(c1, c2) {
-    const cv = document.createElement('canvas');
-    cv.width = 256; cv.height = 256;
-    const ctx = cv.getContext('2d');
-    const g = ctx.createLinearGradient(0, 0, 256, 256);
-    g.addColorStop(0, c1);
-    g.addColorStop(1, c2);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
-    return new THREE.CanvasTexture(cv);
-  }
 
   // ─── Build card groups ──────────────────────────────────────────────────────
   const loader = new THREE.TextureLoader();
@@ -125,22 +88,10 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
     const grp = new THREE.Group();
 
     // ── Face ──
-    let faceMat;
-    if (t.img) {
-      const tex = loader.load(t.img);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      faceMat = new THREE.MeshBasicMaterial({ map: tex });
-    } else {
-      const tex = mkGradTex(t.bg[0], t.bg[1]);
-      // depthWrite: true so near placeholder cards properly occlude cards behind them
-      faceMat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        opacity: 0.55,
-        depthWrite: true,
-      });
-    }
-    grp.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), faceMat));
+    const tex = loader.load(t.img);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    grp.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ map: tex })));
 
     // ── Top border line on face surface ──
     const topBorder = new THREE.Mesh(
@@ -174,6 +125,7 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
     topEdge.position.y = h / 2;
     grp.add(topEdge);
 
+    grp.traverse(obj => { obj.frustumCulled = false; });
     scene.add(grp);
     groups.push(grp);
   });
@@ -189,11 +141,11 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
     const frac = scrollPos - base;
     for (let i = 0; i < N; i++) {
       let slot = posMod(i - base, N);
-      if (slot > N / 2) slot -= N;
+      if (slot > 13) slot -= N;
       const s = slot - frac;
       groups[i].position.set(STEP.x * s, STEP.y * s, STEP.z * s);
-      // No hard visibility toggle — Three.js frustum culling handles natural
-      // entry/exit so cards smoothly appear as a corner before fully sliding in.
+      const ro = Math.round(100 - s * 10);
+      groups[i].children.forEach(c => { c.renderOrder = ro; });
     }
   }
 
@@ -204,6 +156,37 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
     clearTimeout(snapTimer);
     snapTimer = setTimeout(() => { target = Math.round(target); }, 240);
   }, { passive: false });
+
+  // ─── Raycaster — hover cursor + click to open project ───────────────────────
+  const raycaster = new THREE.Raycaster();
+  const mouse2d   = new THREE.Vector2();
+  const faces     = groups.map(g => g.children[0]); // face mesh is always first child
+
+  function updateMouse(e) {
+    mouse2d.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  }
+
+  canvas.addEventListener('mousemove', e => {
+    updateMouse(e);
+    raycaster.setFromCamera(mouse2d, camera);
+    canvas.style.cursor = raycaster.intersectObjects(faces).length ? 'pointer' : 'default';
+  });
+
+  let mouseDownX = 0, mouseDownY = 0;
+  canvas.addEventListener('mousedown', e => { mouseDownX = e.clientX; mouseDownY = e.clientY; });
+
+  canvas.addEventListener('click', e => {
+    // Ignore if the mouse moved more than 4px (user was scrolling, not clicking)
+    if (Math.abs(e.clientX - mouseDownX) + Math.abs(e.clientY - mouseDownY) > 4) return;
+    updateMouse(e);
+    raycaster.setFromCamera(mouse2d, camera);
+    const hits = raycaster.intersectObjects(faces);
+    if (!hits.length) return;
+    const idx = faces.indexOf(hits[0].object);
+    if (idx >= 0 && PROJECTS[idx].id) {
+      window.location.href = `project.html?id=${PROJECTS[idx].id}`;
+    }
+  });
 
   // ─── Resize ─────────────────────────────────────────────────────────────────
   window.addEventListener('resize', () => {
