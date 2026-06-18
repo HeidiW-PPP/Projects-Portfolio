@@ -12,7 +12,7 @@ node screenshot.js
 ```
 Output: `ss_v10.png`. Requires Node.js + Puppeteer (`npm install` if needed). Opens `http://localhost:8765/` — do NOT use `file://`.
 
-## Current State (as of 2026-06-17)
+## Current State (as of 2026-06-18)
 
 **✅ Working:**
 - Three.js r155 loaded locally from `three.min.js`
@@ -30,8 +30,20 @@ Output: `ss_v10.png`. Requires Node.js + Puppeteer (`npm install` if needed). Op
 - `.gitignore` in place, deployed to GitHub Pages
 
 **⏳ Next session:**
-- Fill in real project data in `projects.js` (currently all placeholders)
-- Discuss project ideas aligned with 2-year bioinformatics/software dev/data science trajectory
+- Fill in real project data in `projects.js` — 2-year project roadmap planned, projects will align with coursework
+- First portfolio project in progress: `Diagnostic Feature Analysis` (Summer 2026) — see `C:\Users\Heidi Reneau\OneDrive\Desktop\Projects\Diagnostic Feature Analysis`
+
+## Portfolio Project Roadmap
+
+Projects planned to align with coursework over junior/senior years at UNCC (CS BA, Bioinformatics concentration + Software Dev & Data Science minors).
+
+| Semester | Course(s) | Project |
+|----------|-----------|---------|
+| Summer 2026 | — | **Breast Cancer Diagnostic Feature Analysis** — Python EDA + ML on Wisconsin Breast Cancer dataset. Repo: `HeidiW-PPP/Diagnostic-Feature-Analysis` |
+| Fall 2026 | BINF 3101 + ITSC 3160 | DNA sequence database — SQL schema + Python query tool |
+| Spring 2027 | ITIS 4166 + BINF 2111 | Bioinformatics REST API |
+| Fall 2027 | BINF 3201 + ITCS 3162 | Genomics pipeline + ML classifier on biological data |
+| Spring 2028 | BINF 4211 + Capstone | Applied ML on genomics data — flagship project |
 
 ## Technical Architecture
 
