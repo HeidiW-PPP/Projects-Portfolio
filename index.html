@@ -22,6 +22,45 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
 .bottom-nav .on{color:rgba(255,255,255,.85)}
 .bottom-nav .off{color:rgba(255,255,255,.28)}
 .bottom-nav span:hover{transform:scale(1.18);color:rgba(255,255,255,.95)!important}
+
+@keyframes tt-in{
+  0%  {opacity:0;transform:translateX(-32px) scale(0.62)}
+  55% {opacity:1;transform:translateX(6px) scale(1.06)}
+  75% {transform:translateX(-3px) scale(0.97)}
+  100%{opacity:1;transform:translateX(0) scale(1)}
+}
+@keyframes tt-out{
+  0%  {opacity:1;transform:translateX(0) scale(1)}
+  20% {transform:translateX(7px) scale(1.04)}
+  100%{opacity:0;transform:translateX(-26px) scale(0.68)}
+}
+#tooltip{position:fixed;z-index:200;pointer-events:none;transform:translateY(-50%)}
+#tooltip-inner{
+  background:rgba(8,8,12,.93);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  border:1px solid rgba(138,50,220,.38);
+  border-radius:10px;
+  padding:16px 20px;
+  min-width:220px;max-width:320px;
+  margin-left:10px;
+  transform-origin:left center;
+  opacity:0;
+}
+#tooltip.tt-on  #tooltip-inner{animation:tt-in  .50s cubic-bezier(.34,1.56,.64,1) forwards}
+#tooltip.tt-out #tooltip-inner{animation:tt-out .26s cubic-bezier(.55,0,1,.45)    forwards}
+#tooltip-inner::after{
+  content:'';position:absolute;left:-6px;top:50%;
+  transform:translateY(-50%) rotate(45deg);
+  width:10px;height:10px;
+  background:rgba(8,8,12,.93);
+  border-left:1px solid rgba(138,50,220,.38);
+  border-bottom:1px solid rgba(138,50,220,.38);
+}
+#tt-title{font-size:13px;font-weight:400;letter-spacing:.12em;color:rgba(255,255,255,.95);margin-bottom:6px}
+#tt-sub{font-size:10px;letter-spacing:.05em;color:rgba(255,255,255,.4);margin-bottom:11px;line-height:1.5;text-transform:none}
+#tt-tags{display:flex;flex-wrap:wrap;gap:5px}
+.tt-tag{font-size:8.5px;padding:3px 9px;border-radius:20px;border:1px solid rgba(138,50,220,.5);color:rgba(180,100,255,.9);letter-spacing:.07em}
 </style>
 </head>
 <body>
@@ -43,6 +82,14 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
 </header>
 
 <canvas id="c"></canvas>
+
+<div id="tooltip">
+  <div id="tooltip-inner">
+    <div id="tt-title"></div>
+    <div id="tt-sub"></div>
+    <div id="tt-tags"></div>
+  </div>
+</div>
 
 <div class="bottom-nav">
   <span class="on">OVERVIEW</span>
@@ -131,6 +178,47 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
   let hoveredIdx = -1;
   const hoverOffsets = new Array(N).fill(0);
 
+  // ─── Tooltip ─────────────────────────────────────────────────────────────────
+  const tooltip  = document.getElementById('tooltip');
+  const ttTitle  = document.getElementById('tt-title');
+  const ttSub    = document.getElementById('tt-sub');
+  const ttTags   = document.getElementById('tt-tags');
+  const ttVec    = new THREE.Vector3();
+  let   ttActive = false, ttIdx = -1, ttExitTimer = null;
+
+  const ttInner = document.getElementById('tooltip-inner');
+  function ttShow() {
+    if (ttExitTimer) { clearTimeout(ttExitTimer); ttExitTimer = null; }
+    tooltip.classList.remove('tt-out', 'tt-on');
+    void ttInner.offsetWidth; // force reflow so animation restarts from frame 0
+    tooltip.classList.add('tt-on');
+    ttActive = true;
+  }
+  function ttHide() {
+    if (!ttActive) return;
+    ttActive = false; ttIdx = -1;
+    tooltip.classList.remove('tt-on');
+    tooltip.classList.add('tt-out');
+    ttExitTimer = setTimeout(() => { tooltip.classList.remove('tt-out'); ttExitTimer = null; }, 280);
+  }
+
+  function updateTooltip() {
+    if (hoveredIdx < 0) { ttHide(); return; }
+    if (hoveredIdx !== ttIdx) {
+      ttIdx = hoveredIdx;
+      const p = PROJECTS[ttIdx];
+      ttTitle.textContent = p.title;
+      ttSub.textContent   = p.subtitle;
+      ttTags.innerHTML    = p.tags.map(t => `<span class="tt-tag">${t}</span>`).join('');
+      ttShow();
+    }
+    ttVec.copy(groups[hoveredIdx].position);
+    ttVec.x += TILES[hoveredIdx].w / 2;
+    ttVec.project(camera);
+    tooltip.style.left = ((ttVec.x * 0.5 + 0.5) * innerWidth)  + 'px';
+    tooltip.style.top  = ((-ttVec.y * 0.5 + 0.5) * innerHeight) + 'px';
+  }
+
   function posMod(a, b) { return ((a % b) + b) % b; }
 
   // ─── Position update ────────────────────────────────────────────────────────
@@ -211,6 +299,7 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
     requestAnimationFrame(animate);
     scrollPos += (target - scrollPos) * 0.10;
     update();
+    updateTooltip();
     renderer.render(scene, camera);
   })();
 
