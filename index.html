@@ -9,10 +9,8 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:transparent}
 body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.75);user-select:none}
-#bg{position:fixed;inset:0;z-index:0;overflow:hidden;background:#000}
-#bg-radial{position:absolute;inset:0;background:radial-gradient(100% 100% at 0% 0%,rgb(46,46,46) 0%,rgb(0,0,0) 100%);-webkit-mask:radial-gradient(125% 100% at 0% 0%,#000 0%,rgba(0,0,0,.224) 88.29%,rgba(0,0,0,0) 100%);mask:radial-gradient(125% 100% at 0% 0%,#000 0%,rgba(0,0,0,.224) 88.29%,rgba(0,0,0,0) 100%)}
-.streak{position:absolute;inset:0;opacity:.20;background:linear-gradient(rgb(138,50,220) 0%,rgba(138,50,220,0) 100%);transform:skewX(45deg)}
-#bg-dots{position:absolute;inset:0;opacity:.20;background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,.5) 1px,transparent 0);background-size:20px 20px}
+#bg{position:fixed;inset:0;z-index:0;background:#000}
+#bg-shader{position:absolute;inset:0;width:100%;height:100%}
 #c{position:fixed;inset:0;z-index:1;display:block}
 .nav{position:fixed;top:0;left:0;display:flex;align-items:center;gap:10px;padding:12px 16px;z-index:100}
 .nav-item{display:flex;align-items:center;padding:10px 20px;border:1px solid rgba(255,255,255,.18);border-radius:6px;font-size:10.5px;letter-spacing:.10em;white-space:nowrap;background:transparent;cursor:pointer;transition:transform .28s cubic-bezier(.34,1.56,.64,1),border-color .25s}
@@ -65,16 +63,7 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
 </head>
 <body>
 
-<div id="bg">
-  <div id="bg-radial">
-    <div class="streak" style="-webkit-mask:linear-gradient(90deg,rgba(0,0,0,0) 0%,#000 20%,rgba(0,0,0,0) 36%,#000 55%,rgba(0,0,0,.13) 67%,#000 78%,rgba(0,0,0,0) 97%);mask:linear-gradient(90deg,rgba(0,0,0,0) 0%,#000 20%,rgba(0,0,0,0) 36%,#000 55%,rgba(0,0,0,.13) 67%,#000 78%,rgba(0,0,0,0) 97%)"></div>
-    <div class="streak" style="-webkit-mask:linear-gradient(90deg,rgba(0,0,0,0) 11%,#000 25%,rgba(0,0,0,.55) 41%,rgba(0,0,0,.13) 67%,#000 78%,rgba(0,0,0,0) 97%);mask:linear-gradient(90deg,rgba(0,0,0,0) 11%,#000 25%,rgba(0,0,0,.55) 41%,rgba(0,0,0,.13) 67%,#000 78%,rgba(0,0,0,0) 97%)"></div>
-    <div class="streak" style="-webkit-mask:linear-gradient(90deg,rgba(0,0,0,0) 9%,#000 20%,rgba(0,0,0,.55) 28%,rgba(0,0,0,.424) 40%,#000 48%,rgba(0,0,0,.267) 54%,rgba(0,0,0,.13) 78%,#000 88%,rgba(0,0,0,0) 97%);mask:linear-gradient(90deg,rgba(0,0,0,0) 9%,#000 20%,rgba(0,0,0,.55) 28%,rgba(0,0,0,.424) 40%,#000 48%,rgba(0,0,0,.267) 54%,rgba(0,0,0,.13) 78%,#000 88%,rgba(0,0,0,0) 97%)"></div>
-    <div class="streak" style="-webkit-mask:linear-gradient(90deg,rgba(0,0,0,0) 0%,#000 17%,rgba(0,0,0,.55) 26%,#000 35%,rgba(0,0,0,0) 47%,rgba(0,0,0,.13) 69%,#000 79%,rgba(0,0,0,0) 97%);mask:linear-gradient(90deg,rgba(0,0,0,0) 0%,#000 17%,rgba(0,0,0,.55) 26%,#000 35%,rgba(0,0,0,0) 47%,rgba(0,0,0,.13) 69%,#000 79%,rgba(0,0,0,0) 97%)"></div>
-    <div class="streak" style="-webkit-mask:linear-gradient(90deg,rgba(0,0,0,0) 0%,#000 20%,rgba(0,0,0,.55) 27%,#000 42%,rgba(0,0,0,0) 48%,rgba(0,0,0,.13) 67%,#000 74%,#000 82%,rgba(0,0,0,.47) 88%,rgba(0,0,0,0) 97%);mask:linear-gradient(90deg,rgba(0,0,0,0) 0%,#000 20%,rgba(0,0,0,.55) 27%,#000 42%,rgba(0,0,0,0) 48%,rgba(0,0,0,.13) 67%,#000 74%,#000 82%,rgba(0,0,0,.47) 88%,rgba(0,0,0,0) 97%)"></div>
-  </div>
-  <div id="bg-dots"></div>
-</div>
+<div id="bg"><canvas id="bg-shader"></canvas></div>
 
 <header class="nav">
   <div class="nav-item">HEIDI W. — PROJECTS PORTFOLIO</div>
@@ -99,6 +88,129 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
 <script src="three.min.js"></script>
 <script src="projects.js"></script>
 <script>
+// ─── Shader background (plain WebGL, no dependencies) ───────────────────────
+const _bgRender = (function () {
+  const bgCanvas = document.getElementById('bg-shader');
+  if (!bgCanvas) return null;
+  const gl = bgCanvas.getContext('webgl');
+  if (!gl) return null;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); return null; }
+    return s;
+  }
+
+  const vert = compile(gl.VERTEX_SHADER, `attribute vec4 pos;void main(){gl_Position=pos;}`);
+  const frag = compile(gl.FRAGMENT_SHADER, `
+    precision highp float;
+    uniform vec2 iResolution;
+    uniform float iTime;
+
+    const float overallSpeed     = 0.09;
+    const float gridSmoothWidth  = 0.015;
+    const float axisWidth        = 0.05;
+    const float majorLineWidth   = 0.025;
+    const float minorLineWidth   = 0.0125;
+    const float majorLineFreq    = 5.0;
+    const float minorLineFreq    = 1.0;
+    const float scale            = 5.0;
+    const vec4  lineColor        = vec4(0.16, 0.07, 0.34, 1.0);
+    const float minLineWidth     = 0.01;
+    const float maxLineWidth     = 0.2;
+    const float lineSpeed        = 1.0 * overallSpeed;
+    const float lineAmplitude    = 1.0;
+    const float lineFrequency    = 0.2;
+    const float warpSpeed        = 0.2 * overallSpeed;
+    const float warpFrequency    = 0.5;
+    const float warpAmplitude    = 1.0;
+    const float offsetFrequency  = 0.5;
+    const float offsetSpeed      = 1.33 * overallSpeed;
+    const float minOffsetSpread  = 0.6;
+    const float maxOffsetSpread  = 2.0;
+    const int   linesPerGroup    = 16;
+
+    #define drawSmoothLine(pos,hw,t)  smoothstep(hw,0.0,abs(pos-(t)))
+    #define drawCrispLine(pos,hw,t)   smoothstep(hw+gridSmoothWidth,hw,abs(pos-(t)))
+    #define drawPeriodicLine(freq,w,t) drawCrispLine(freq/2.0,w,abs(mod(t,freq)-(freq)/2.0))
+    #define drawCircle(p,r,c)         smoothstep(r+gridSmoothWidth,r,length(c-(p)))
+
+    float random(float t){
+      return (cos(t)+cos(t*1.3+1.3)+cos(t*1.4+1.4))/3.0;
+    }
+    float plasmaY(float x,float hFade,float offset){
+      return random(x*lineFrequency+iTime*lineSpeed)*hFade*lineAmplitude+offset;
+    }
+
+    void main(){
+      vec2 uv    = gl_FragCoord.xy / iResolution.xy;
+      vec2 space = (gl_FragCoord.xy - iResolution.xy*0.5) / iResolution.x * 2.0 * scale;
+
+      float hFade = 1.0-(cos(uv.x*6.28)*0.5+0.5);
+      float vFade = 1.0-(cos(uv.y*6.28)*0.5+0.5);
+
+      space.y += random(space.x*warpFrequency+iTime*warpSpeed)*warpAmplitude*(0.5+hFade);
+      space.x += random(space.y*warpFrequency+iTime*warpSpeed+2.0)*warpAmplitude*hFade;
+
+      vec4 lines = vec4(0.0);
+      for(int l=0;l<linesPerGroup;l++){
+        float norm   = float(l)/float(linesPerGroup);
+        float offPos = float(l)+space.x*offsetFrequency;
+        float rand   = random(offPos+iTime*offsetSpeed)*0.5+0.5;
+        float hw     = mix(minLineWidth,maxLineWidth,rand*hFade)/2.0;
+        float offset = random(offPos+iTime*offsetSpeed*(1.0+norm))*mix(minOffsetSpread,maxOffsetSpread,hFade);
+        float lpos   = plasmaY(space.x,hFade,offset);
+        float line   = drawSmoothLine(lpos,hw,space.y)/2.0+drawCrispLine(lpos,hw*0.15,space.y);
+        float cx     = mod(float(l)+iTime*lineSpeed,25.0)-12.0;
+        vec2  cp     = vec2(cx,plasmaY(cx,hFade,offset));
+        line += drawCircle(cp,0.01,space)*4.0;
+        lines += line*lineColor*rand;
+      }
+
+      vec4 col = mix(vec4(0.1,0.1,0.3,1.0), vec4(0.3,0.1,0.5,1.0), uv.x);
+      col *= vFade;
+      col.a = 1.0;
+      col  += lines;
+      gl_FragColor = col;
+    }
+  `);
+  if (!vert || !frag) return null;
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vert); gl.attachShader(prog, frag);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); return null; }
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+
+  const posLoc  = gl.getAttribLocation(prog,  'pos');
+  const resLoc  = gl.getUniformLocation(prog, 'iResolution');
+  const timeLoc = gl.getUniformLocation(prog, 'iTime');
+
+  function resize() {
+    bgCanvas.width  = innerWidth;
+    bgCanvas.height = innerHeight;
+    gl.viewport(0, 0, innerWidth, innerHeight);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const t0 = Date.now();
+  return function () {
+    gl.useProgram(prog);
+    gl.uniform2f(resLoc, bgCanvas.width, bgCanvas.height);
+    gl.uniform1f(timeLoc, (Date.now() - t0) / 1000);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(posLoc);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  };
+})();
+
 (function () {
 
   // ─── Tile definitions (loaded from projects.js) ─────────────────────────────
@@ -298,6 +410,7 @@ body{font-family:'Barlow',ui-sans-serif,sans-serif;font-weight:300;font-size:10p
   (function animate() {
     requestAnimationFrame(animate);
     scrollPos += (target - scrollPos) * 0.10;
+    if (_bgRender) _bgRender();
     update();
     updateTooltip();
     renderer.render(scene, camera);
