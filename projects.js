@@ -11,7 +11,7 @@ const PROJECTS = [
     w: 3.35, h: 1.76,
     tags: ['Python', 'Pandas / Scikit-learn', 'Matplotlib / Seaborn', 'Machine Learning'],
     year: '2026',
-    github: 'https://github.com/HeidiW-PPP/Diagnostic-Feature_Analysis',
+    github: 'https://github.com/HeidiW-PPP/Diagnostic-Feature-Analysis',
     live: '',
     description: 'An end-to-end exploratory data analysis and machine learning project using the Wisconsin Breast Cancer Diagnostic dataset. Cleaned and visualized feature distributions, correlation heatmaps, and class separability. Trained and evaluated multiple classifiers (logistic regression, decision tree, SVM) to predict malignancy from cell nucleus measurements, with a focus on interpretability and clinically meaningful metrics like recall.',
     images: [],
