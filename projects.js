@@ -5,15 +5,15 @@
 const PROJECTS = [
   {
     id: 'project-01',
-    title: 'Project 01',
-    subtitle: 'Coming soon',
-    img: 'tile_images/tile1.jpg',
-    w: 1.85, h: 2.50,
-    tags: [],
-    year: '',
-    github: '',
+    title: 'Diagnostic Feature Analysis',
+    subtitle: 'Exploratory analysis and classification of breast cancer diagnostic data',
+    img: 'tile_images/Diagnostic_Feature_Analysis.png',
+    w: 3.35, h: 1.76,
+    tags: ['Python', 'Pandas / Scikit-learn', 'Matplotlib / Seaborn', 'Machine Learning'],
+    year: '2026',
+    github: 'https://github.com/HeidiW-PPP/Diagnostic-Feature_Analysis',
     live: '',
-    description: '',
+    description: 'An end-to-end exploratory data analysis and machine learning project using the Wisconsin Breast Cancer Diagnostic dataset. Cleaned and visualized feature distributions, correlation heatmaps, and class separability. Trained and evaluated multiple classifiers (logistic regression, decision tree, SVM) to predict malignancy from cell nucleus measurements, with a focus on interpretability and clinically meaningful metrics like recall.',
     images: [],
   },
   {
